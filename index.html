@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aircraft Map — MapLibre + Three</title>
+  </head>
+  <body>
+    <main id="app">
+      <div id="map"></div>
+      <aside class="panel">
+        <div class="eyebrow">MAPLIBRE + THREE.JS</div>
+        <h1>Aircraft Explorer</h1>
+        <p id="mode-copy">平视地图：2D sprite</p>
+        <div class="divider"></div>
+        <label for="pitch">地图俯仰角 <output id="pitch-value">0°</output></label>
+        <input id="pitch" type="range" min="0" max="68" value="0" />
+        <label class="switch"><input id="drop-lines" type="checkbox" checked /> 显示高度投影线</label>
+        <label class="switch"><input id="glb-models" type="checkbox" /> 使用 GLB 近景模型</label>
+        <div class="legend">
+          <span><i class="dot amber"></i> A320 / B738</span>
+          <span><i class="dot blue"></i> B789 / A333</span>
+          <span><i class="dot mint"></i> HELI</span>
+        </div>
+      </aside>
+      <div class="status"><span class="pulse"></span><span id="status-copy">39 targets · live demo</span></div>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

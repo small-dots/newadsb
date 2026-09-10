@@ -1,0 +1,20 @@
+:root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #07101b; }
+* { box-sizing: border-box; }
+body { margin: 0; overflow: hidden; }
+#app, #map { width: 100vw; height: 100vh; }
+.panel { position: fixed; z-index: 2; top: 22px; left: 22px; width: 300px; padding: 20px; border: 1px solid rgba(183, 213, 245, .2); border-radius: 16px; background: rgba(7, 16, 27, .85); box-shadow: 0 18px 70px rgba(0, 0, 0, .42); backdrop-filter: blur(16px); }
+.eyebrow { color: #76b8ff; font-size: 10px; letter-spacing: .15em; font-weight: 800; }
+h1 { margin: 8px 0 4px; font-size: 24px; letter-spacing: -.04em; }
+p { margin: 0; color: #9eb3c9; font-size: 13px; }
+.divider { height: 1px; margin: 18px 0; background: rgba(255,255,255,.12); }
+label { display: flex; justify-content: space-between; color: #d8e7f8; font-size: 12px; margin: 12px 0 7px; }
+output { color: #76b8ff; font-variant-numeric: tabular-nums; }
+input[type="range"] { width: 100%; accent-color: #76b8ff; }
+.switch { justify-content: flex-start; align-items: center; gap: 8px; margin-top: 18px; }
+.switch input { accent-color: #76b8ff; }
+.legend { display: grid; gap: 8px; margin-top: 18px; color: #b9cde1; font-size: 11px; }
+.dot { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; box-shadow: 0 0 10px currentColor; }.amber { color: #ffbd4a; background: #ffbd4a; }.blue { color: #73b7ff; background: #73b7ff; }.mint { color: #6fe1c1; background: #6fe1c1; }
+.status { position: fixed; z-index: 2; right: 22px; bottom: 22px; display: flex; align-items: center; gap: 8px; padding: 10px 13px; border-radius: 999px; color: #b9cde1; background: rgba(7,16,27,.82); font-size: 11px; backdrop-filter: blur(12px); }
+.pulse { width: 8px; height: 8px; border-radius: 50%; background: #6fe1c1; box-shadow: 0 0 0 0 rgba(111,225,193,.8); animation: pulse 1.8s infinite; }
+@keyframes pulse { 70% { box-shadow: 0 0 0 8px rgba(111,225,193,0); } 100% { box-shadow: 0 0 0 0 rgba(111,225,193,0); } }
+.maplibregl-ctrl-bottom-right { opacity: .65; }
