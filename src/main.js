@@ -1,8 +1,6 @@
 import maplibregl from 'maplibre-gl';
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { AircraftModels } from './aircraft-models.js';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './style.css';
 
@@ -155,114 +153,22 @@ class Aircraft3DLayer {
     // GLB meshes share this proven MapLibre/Three render pass. Their custom
     // layer is retained for lifecycle/loading only; a second pass on the
     // shared canvas was not submitted reliably by MapLibre.
-    modelLayer?.updateInSharedScene();
-    this.groups.forEach(({ root }) => {
+    this.groups.forEach(({ root, item }) => {
       root.children[0].visible = dropLines.checked;
       const iconSize = 30 / this.map.transform.worldSize;
-      root.children.filter(child => child.userData.icon).forEach(icon => { icon.visible = this.showAirIcons || icon.userData.shadow; icon.scale.setScalar(iconSize); });
+      root.children.filter(child => child.userData.icon).forEach(icon => { icon.visible = !modelLayer?.hasModel(item.id) || icon.userData.shadow; icon.scale.setScalar(iconSize); });
     });
     const matrix = args.defaultProjectionData?.mainMatrix ?? args;
     this.camera.projectionMatrix.fromArray(matrix);
-    this.renderer.resetState(); this.renderer.render(this.scene, this.camera); this.map.triggerRepaint();
+    this.renderer.resetState(); this.renderer.render(this.scene, this.camera);
+    modelLayer?.render(this.renderer, gl, args);
   }
   setVisible(value, showAirIcons = true) { this.visible = value; this.showAirIcons = showAirIcons; this.groups.forEach(({ root }) => root.visible = value); this.map?.triggerRepaint(); }
 }
 
-class AircraftModelLayer {
-  id = 'aircraft-model-3d'; type = 'custom'; renderingMode = '3d';
-  constructor(items) { this.items = items; this.visible = false; this.scene = new THREE.Scene(); this.camera = new THREE.Camera(); this.cache = new Map(); this.groups = []; this.errors = []; }
-  onAdd(mapRef, gl) {
-    this.map = mapRef;
-    document.querySelector('#status-copy').textContent = 'GLB: attaching shared scene…';
-    // MapLibre exposes one WebGL context for all custom layers. Reuse the
-    // renderer already attached by the altitude layer; constructing a second
-    // WebGLRenderer on that canvas was the reason this layer never submitted
-    // any geometry (including the diagnostic cube) to the map pass.
-    this.scene = threeLayer.scene;
-    this.camera = threeLayer.camera;
-    this.renderer = threeLayer.renderer;
-    this.renderer.autoClear = false;
-    // A high, cool key light makes the fuselage and wing thickness readable
-    // against a tilted map; the old almost-flat ambient illumination made a
-    // GLB indistinguishable from the atlas sprite.
-    this.scene.add(new THREE.HemisphereLight(0xf7fbff, 0x17202a, 1.15));
-    const key = new THREE.DirectionalLight(0xffffff, 2.35); key.position.set(-18, -24, 72); this.scene.add(key);
-    this.loader = new GLTFLoader(); this.loader.setMeshoptDecoder(MeshoptDecoder);
-    [...new Set(this.items.map(({ family }) => family))].forEach(family => this.loadFamily(family));
-  }
-  async loadFamily(family) {
-    const config = familyToModel[family];
-    try {
-      if (!this.cache.has(config.file)) this.cache.set(config.file, this.loader.loadAsync(`/${config.file}`));
-      const geometry = this.prepareGeometry((await this.cache.get(config.file)).scene, config.rotateY);
-      const length = this.modelLength(geometry);
-      // GLB meshes use the same rooted-coordinate pattern as the working
-      // altitude-sprite layer. This avoids the failed instanced world-matrix
-      // projection and keeps each downloaded model genuinely drawable.
-      this.items.filter(item => item.family === family).forEach(item => {
-        const root = new THREE.Group();
-        const outlineGeometry = geometry.clone(); outlineGeometry.scale(1.026, 1.026, 1.026);
-        // MapLibre's raster base map has already populated the shared depth
-        // buffer. Aircraft are an overlay (as in AirNav's altitude layer),
-        // so they must not be depth-rejected by the map surface.
-        const outline = new THREE.Mesh(outlineGeometry, new THREE.MeshBasicMaterial({ color: 0x17212b, side: THREE.BackSide, transparent: true, opacity: .42, depthTest: false, depthWrite: false }));
-        const surface = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ color: item.color, shininess: 42, specular: 0x334455, side: THREE.DoubleSide, depthTest: false, depthWrite: false }));
-        outline.renderOrder = 4; surface.renderOrder = 5;
-        root.add(outline, surface); root.visible = this.visible;
-        this.scene.add(root); this.groups.push({ item, root, length });
-      });
-      if (glbModels.checked) document.querySelector('#status-copy').textContent = `GLB loaded · ${this.groups.length} aircraft meshes`;
-      this.map.triggerRepaint();
-    } catch (error) {
-      this.errors.push(`${family}: ${error.message || error}`);
-      console.warn('GLB batch unavailable', family, error);
-      document.querySelector('#status-copy').textContent = `GLB load error · ${this.errors.join(' | ')}`;
-    }
-  }
-  prepareGeometry(scene, rotateY) {
-    scene.updateMatrixWorld(true);
-    const transforms = [new THREE.Matrix4().makeRotationY(rotateY), new THREE.Matrix4().makeRotationX(Math.PI / 2)];
-    const parts = [];
-    scene.traverse(mesh => { if (mesh.isMesh) { const geometry = mesh.geometry.clone(); geometry.applyMatrix4(mesh.matrixWorld); transforms.forEach(transform => geometry.applyMatrix4(transform)); geometry.computeVertexNormals(); parts.push(geometry); } });
-    const geometry = mergeGeometries(parts, false);
-    parts.forEach(part => part.dispose());
-    geometry.computeBoundingBox();
-    const box = geometry.boundingBox; const center = box.getCenter(new THREE.Vector3());
-    geometry.translate(-center.x, -center.y, -box.min.z);
-    // GLB exporters do not agree on authoring units. Normalize every decoded
-    // airframe to a one-unit bounding length before placing it in Mercator
-    // space; otherwise a model authored in millimetres is effectively
-    // microscopic beside the fixed-size altitude sprites.
-    geometry.computeBoundingBox();
-    const size = geometry.boundingBox.getSize(new THREE.Vector3());
-    const longest = Math.max(size.x, size.y, size.z);
-    geometry.scale(1 / longest, 1 / longest, 1 / longest);
-    return geometry;
-  }
-  modelLength(geometry) { geometry.computeBoundingBox(); const size = geometry.boundingBox.getSize(new THREE.Vector3()); return Math.max(size.x, size.y, size.z); }
-  render(gl, args) {
-    this.updateInSharedScene();
-  }
-  updateInSharedScene() {
-    if (!this.visible) return;
-    // This is an explicit *near* model mode, not the overview sprite layer.
-    // At the earlier 56px floor a 38m A320 was projected to roughly 20px at
-    // pitch 60°, so its GLB surface could not be told apart from a sprite.
-    const minWorldSize = (this.map.getZoom() >= 13 ? 156 : 72) / this.map.transform.worldSize;
-    this.groups.forEach(({ item, root, length }) => {
-      const merc = maplibregl.MercatorCoordinate.fromLngLat([item.lng, item.lat], item.altitude);
-      const selectedBoost = item.id === featuredAircraft[0].id ? 1.3 : 1;
-      const size = selectedBoost * Math.max(item.length * merc.meterInMercatorCoordinateUnits(), minWorldSize) / length;
-      root.visible = true;
-      root.position.set(merc.x, merc.y, merc.z);
-      root.rotation.set(0, 0, -THREE.MathUtils.degToRad(item.heading));
-      root.scale.setScalar(size);
-    });
-  }
-  setVisible(value) { this.visible = value; this.groups.forEach(({ root }) => { root.visible = value; }); this.map?.triggerRepaint(); }
-}
 
 let threeLayer, modelLayer;
+if (import.meta.env.DEV) window.aircraftDebug = { map, get modelLayer() { return modelLayer; }, get threeLayer() { return threeLayer; } };
 map.on('load', () => {
   addAirNavSprites().then(() => {
     map.addSource('aircraft', { type: 'geojson', data: flatFeatureCollection() });
@@ -274,12 +180,8 @@ map.on('load', () => {
   // Models deliberately share aircraft-3d's custom-layer render pass.  Do
   // not register a second MapLibre custom layer: in this demo style its
   // lifecycle callback was skipped, leaving all GLBs outside the scene.
-  modelLayer = new AircraftModelLayer(aircraft);
-  const attachModels = () => {
-    if (!threeLayer.renderer) return requestAnimationFrame(attachModels);
-    modelLayer.onAdd(map, null);
-  };
-  requestAnimationFrame(attachModels);
+  modelLayer = new AircraftModels(aircraft, updateMode);
+  modelLayer.load(map);
 });
 
 pitchInput.addEventListener('input', () => map.easeTo({ pitch: Number(pitchInput.value), duration: 0 }));
@@ -287,9 +189,6 @@ map.on('pitch', () => { pitchInput.value = String(Math.round(map.getPitch())); p
 map.on('zoom', updateMode);
 dropLines.addEventListener('change', () => map.triggerRepaint());
 glbModels.addEventListener('change', () => {
-  if (glbModels.checked && (map.getZoom() < 15 || map.getPitch() < 55)) {
-    const focus = featuredAircraft[0];
-    map.easeTo({ center: [focus.lng, focus.lat], zoom: 15.2, pitch: 60, duration: 650 });
-  }
+  if (glbModels.checked && map.getPitch() === 0) map.easeTo({ pitch: 60, duration: 500 });
   updateMode();
 });
